@@ -1,7 +1,7 @@
-import feedparser
 import requests
 import schedule
 import time
+import xml.etree.ElementTree as ET
 
 # ── Config ────────────────────────────────────────────────
 RSS_URL         = "https://rsshub.app/telegram/channel/ssternenko"
@@ -13,13 +13,24 @@ SEND_HOUR       = 19  # 7 PM
 
 
 def fetch_posts():
-    feed = feedparser.parse(RSS_URL)
+    headers = {"User-Agent": "Mozilla/5.0"}
+    r = requests.get(RSS_URL, headers=headers, timeout=15)
+    r.raise_for_status()
+    
+    root = ET.fromstring(r.content)
+    ns = {"content": "http://purl.org/rss/1.0/modules/content/"}
+    
     posts = []
-    for entry in feed.entries[:20]:  # last 20 posts
-        title   = entry.get("title", "")
-        summary = entry.get("summary", entry.get("description", ""))
-        posts.append(f"{title}\n{summary}")
-    return "\n\n---\n\n".join(posts)
+    for item in root.iter("item"):
+        title = item.findtext("title") or ""
+        desc  = item.findtext("description") or ""
+        # strip HTML tags roughly
+        import re
+        desc = re.sub(r"<[^>]+>", "", desc).strip()
+        posts.append(f"{title}\n{desc}".strip())
+    
+    print(f"Found {len(posts)} posts")
+    return "\n\n---\n\n".join(posts[:20])
 
 
 def summarize(posts_text):
@@ -59,7 +70,7 @@ def send_telegram(text):
         f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
         json={
             "chat_id": TELEGRAM_CHAT,
-            "text": f"📰 *Daily Summary — Sternenko*\n\n{text}",
+            "text": f"📰 *Daily Summary — Ssternenko*\n\n{text}",
             "parse_mode": "Markdown",
         },
         timeout=10,
@@ -68,18 +79,21 @@ def send_telegram(text):
 
 def run_summary():
     print("Fetching posts...")
-    posts = fetch_posts()
-    if not posts:
-        print("No posts found.")
-        return
-    print("Summarizing...")
-    summary = summarize(posts)
-    print("Sending to Telegram...")
-    send_telegram(summary)
-    print("Done!")
+    try:
+        posts = fetch_posts()
+        if not posts:
+            print("No posts found.")
+            return
+        print("Summarizing...")
+        summary = summarize(posts)
+        print("Sending to Telegram...")
+        send_telegram(summary)
+        print("Done!")
+    except Exception as e:
+        print(f"Error: {e}")
 
 
-# Run once immediately on startup so you can test it
+# Run once immediately on startup
 run_summary()
 
 # Then schedule daily at 7 PM
