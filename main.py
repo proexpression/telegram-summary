@@ -13,15 +13,21 @@ TELEGRAM_CHAT = os.getenv("TELEGRAM_CHAT")
 SEND_HOUR = int(os.getenv("SEND_HOUR", "19"))
 
 SESSION = requests.Session()
-SESSION.headers.update({"User-Agent": "Mozilla/5.0"})
+SESSION.headers.update({
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Accept": "application/rss+xml,application/xml,text/xml,text/html;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Cache-Control": "no-cache",
+})
 
 def strip_html(text):
     text = html.unescape(text or "")
     return re.sub(r"<[^>]+>", "", text).strip()
 
 def fetch_posts():
-    r = SESSION.get(RSS_URL, timeout=20)
-    r.raise_for_status()
+    r = SESSION.get(RSS_URL, timeout=30, allow_redirects=True)
+    if r.status_code != 200:
+        raise RuntimeError(f"RSS fetch failed: {r.status_code} {r.text[:300]}")
 
     root = ET.fromstring(r.content)
     posts = []
@@ -66,8 +72,7 @@ def summarize(posts_text):
         timeout=60,
     )
     response.raise_for_status()
-    data = response.json()
-    return data["choices"][0]["message"]["content"].strip()
+    return response.json()["choices"][0]["message"]["content"].strip()
 
 def send_telegram(text):
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT:
@@ -99,17 +104,10 @@ def run_summary():
         send_telegram(summary)
 
         print("Done!")
-    except requests.HTTPError as e:
-        status = getattr(e.response, "status_code", None)
-        if status == 403:
-            print(f"RSSHub returned 403 for {RSS_URL}. This channel likely needs a self-hosted RSSHub with Telegram session config.")
-        else:
-            print(f"HTTP error: {e}")
     except Exception as e:
         print(f"Error: {e}")
 
 run_summary()
-
 schedule.every().day.at(f"{SEND_HOUR:02d}:00").do(run_summary)
 
 print(f"Scheduler running — will send summary every day at {SEND_HOUR:02d}:00")
