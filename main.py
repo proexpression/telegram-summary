@@ -4,7 +4,7 @@ import schedule
 import time
 
 # ── Config ────────────────────────────────────────────────
-RSS_URL         = "https://rsshub.app/telegram/channel/sternenko"
+RSS_URL         = "https://rsshub.app/telegram/channel/ssternenko"
 OPENROUTER_KEY  = "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"
 TELEGRAM_TOKEN  = "8751921873:AAGI8gi8boQB9LhaQTBg6SGAuuAIQ-RViUE"
 TELEGRAM_CHAT   = "304913194"
